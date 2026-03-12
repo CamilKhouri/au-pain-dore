@@ -1,13 +1,18 @@
 const express = require('express');
 const Database = require('better-sqlite3');
-const { Resend } = require('resend');
+const nodemailer = require('nodemailer');
 const path = require('path');
 const fs = require('fs');
 
 // ===== Email Setup =====
-const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 const BAKERY_EMAIL = process.env.BAKERY_EMAIL || 'ouldjicamil@gmail.com';
-const FROM_EMAIL = process.env.FROM_EMAIL || 'Au Pain Doré <onboarding@resend.dev>';
+const GMAIL_USER = process.env.GMAIL_USER || 'ouldjicamil@gmail.com';
+const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD || '';
+
+const transporter = GMAIL_APP_PASSWORD ? nodemailer.createTransport({
+    service: 'gmail',
+    auth: { user: GMAIL_USER, pass: GMAIL_APP_PASSWORD }
+}) : null;
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -64,10 +69,10 @@ function formatDate(dateStr) {
 }
 
 async function sendBakeryEmail(order) {
-    if (!resend) return;
+    if (!transporter) return;
     const items = JSON.parse(order.items);
-    await resend.emails.send({
-        from: FROM_EMAIL,
+    await transporter.sendMail({
+        from: `Au Pain Doré <${GMAIL_USER}>`,
         to: BAKERY_EMAIL,
         subject: `Nouvelle commande #${order.id} - ${order.first_name} ${order.last_name}`,
         html: `
@@ -109,10 +114,10 @@ async function sendBakeryEmail(order) {
 }
 
 async function sendClientEmail(order) {
-    if (!resend) return;
+    if (!transporter) return;
     const items = JSON.parse(order.items);
-    await resend.emails.send({
-        from: FROM_EMAIL,
+    await transporter.sendMail({
+        from: `Au Pain Doré <${GMAIL_USER}>`,
         to: order.email,
         subject: `Confirmation de votre commande - Au Pain Doré`,
         html: `
