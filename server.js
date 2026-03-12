@@ -1,7 +1,13 @@
 const express = require('express');
 const Database = require('better-sqlite3');
+const { Resend } = require('resend');
 const path = require('path');
 const fs = require('fs');
+
+// ===== Email Setup =====
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+const BAKERY_EMAIL = process.env.BAKERY_EMAIL || 'ouldjicamil@gmail.com';
+const FROM_EMAIL = process.env.FROM_EMAIL || 'Au Pain Doré <onboarding@resend.dev>';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -41,10 +47,119 @@ db.exec(`
 app.use(express.json());
 app.use(express.static(path.join(__dirname)));
 
+// ===== Email Functions =====
+function formatItemsHtml(items) {
+    return items.map(item =>
+        `<tr>
+            <td style="padding:8px 12px;border-bottom:1px solid #eee;">${item.name}</td>
+            <td style="padding:8px 12px;border-bottom:1px solid #eee;text-align:center;">${item.qty}</td>
+            <td style="padding:8px 12px;border-bottom:1px solid #eee;text-align:right;">${(item.price * item.qty).toFixed(2).replace('.', ',')} &euro;</td>
+        </tr>`
+    ).join('');
+}
+
+function formatDate(dateStr) {
+    const date = new Date(dateStr + 'T00:00:00');
+    return date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+async function sendBakeryEmail(order) {
+    if (!resend) return;
+    const items = JSON.parse(order.items);
+    await resend.emails.send({
+        from: FROM_EMAIL,
+        to: BAKERY_EMAIL,
+        subject: `Nouvelle commande #${order.id} - ${order.first_name} ${order.last_name}`,
+        html: `
+        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#1a1a1a;color:#ccc;padding:0;">
+            <div style="background:#111;padding:24px;text-align:center;border-bottom:2px solid #c9a96e;">
+                <h1 style="color:#c9a96e;margin:0;font-size:22px;">Nouvelle Commande #${order.id}</h1>
+            </div>
+            <div style="padding:24px;">
+                <h2 style="color:#c9a96e;font-size:16px;margin:0 0 16px;">Client</h2>
+                <p style="margin:4px 0;"><strong style="color:#fff;">${order.first_name} ${order.last_name}</strong></p>
+                <p style="margin:4px 0;">Tel: ${order.phone}</p>
+                <p style="margin:4px 0;">Email: ${order.email}</p>
+
+                <h2 style="color:#c9a96e;font-size:16px;margin:24px 0 12px;">Retrait</h2>
+                <p style="margin:4px 0;color:#fff;font-size:18px;">${formatDate(order.pickup_date)} &agrave; ${order.pickup_time}</p>
+
+                ${order.notes ? `<h2 style="color:#c9a96e;font-size:16px;margin:24px 0 8px;">Notes</h2><p style="margin:0;font-style:italic;">${order.notes}</p>` : ''}
+
+                <h2 style="color:#c9a96e;font-size:16px;margin:24px 0 12px;">Articles</h2>
+                <table style="width:100%;border-collapse:collapse;background:#222;border-radius:4px;">
+                    <thead>
+                        <tr style="border-bottom:2px solid #c9a96e;">
+                            <th style="padding:10px 12px;text-align:left;color:#c9a96e;font-size:12px;text-transform:uppercase;">Produit</th>
+                            <th style="padding:10px 12px;text-align:center;color:#c9a96e;font-size:12px;text-transform:uppercase;">Qty</th>
+                            <th style="padding:10px 12px;text-align:right;color:#c9a96e;font-size:12px;text-transform:uppercase;">Prix</th>
+                        </tr>
+                    </thead>
+                    <tbody>${formatItemsHtml(items)}</tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="2" style="padding:12px;text-align:right;color:#fff;font-weight:bold;border-top:2px solid #c9a96e;">Total</td>
+                            <td style="padding:12px;text-align:right;color:#c9a96e;font-weight:bold;font-size:18px;border-top:2px solid #c9a96e;">${order.total.toFixed(2).replace('.', ',')} &euro;</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>`
+    });
+}
+
+async function sendClientEmail(order) {
+    if (!resend) return;
+    const items = JSON.parse(order.items);
+    await resend.emails.send({
+        from: FROM_EMAIL,
+        to: order.email,
+        subject: `Confirmation de votre commande - Au Pain Doré`,
+        html: `
+        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#1a1a1a;color:#ccc;padding:0;">
+            <div style="background:#111;padding:24px;text-align:center;border-bottom:2px solid #c9a96e;">
+                <h1 style="color:#c9a96e;margin:0;font-size:22px;">Au Pain Dor&eacute;</h1>
+                <p style="color:#888;margin:8px 0 0;font-size:13px;">Confirmation de commande</p>
+            </div>
+            <div style="padding:24px;">
+                <p style="color:#fff;font-size:16px;">Bonjour ${order.first_name},</p>
+                <p>Merci pour votre commande ! Voici le r&eacute;capitulatif :</p>
+
+                <div style="background:#222;padding:16px;margin:20px 0;border-left:3px solid #c9a96e;">
+                    <p style="margin:0;color:#c9a96e;font-size:14px;text-transform:uppercase;letter-spacing:1px;">Retrait pr&eacute;vu</p>
+                    <p style="margin:8px 0 0;color:#fff;font-size:18px;">${formatDate(order.pickup_date)} &agrave; ${order.pickup_time}</p>
+                    <p style="margin:8px 0 0;font-size:13px;">42 Rue du Faubourg Saint-Honor&eacute;, 75008 Paris</p>
+                </div>
+
+                <table style="width:100%;border-collapse:collapse;margin:20px 0;">
+                    <thead>
+                        <tr style="border-bottom:2px solid #c9a96e;">
+                            <th style="padding:10px 12px;text-align:left;color:#c9a96e;font-size:12px;text-transform:uppercase;">Produit</th>
+                            <th style="padding:10px 12px;text-align:center;color:#c9a96e;font-size:12px;text-transform:uppercase;">Qty</th>
+                            <th style="padding:10px 12px;text-align:right;color:#c9a96e;font-size:12px;text-transform:uppercase;">Prix</th>
+                        </tr>
+                    </thead>
+                    <tbody>${formatItemsHtml(items)}</tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="2" style="padding:12px;text-align:right;color:#fff;font-weight:bold;border-top:2px solid #c9a96e;">Total</td>
+                            <td style="padding:12px;text-align:right;color:#c9a96e;font-weight:bold;font-size:18px;border-top:2px solid #c9a96e;">${order.total.toFixed(2).replace('.', ',')} &euro;</td>
+                        </tr>
+                    </tfoot>
+                </table>
+
+                <p style="color:#888;font-size:13px;margin-top:24px;">Si vous avez des questions, contactez-nous au 01 42 65 78 90.</p>
+                <p style="color:#888;font-size:13px;">&Agrave; bient&ocirc;t !</p>
+                <p style="color:#c9a96e;font-style:italic;">L'&eacute;quipe Au Pain Dor&eacute;</p>
+            </div>
+        </div>`
+    });
+}
+
 // ===== API Routes =====
 
 // Create a new order
-app.post('/api/orders', (req, res) => {
+app.post('/api/orders', async (req, res) => {
     const { firstName, lastName, email, phone, pickupDate, pickupTime, notes, items, total } = req.body;
 
     if (!firstName || !lastName || !email || !phone || !pickupDate || !pickupTime || !items || !total) {
@@ -68,8 +183,17 @@ app.post('/api/orders', (req, res) => {
         total
     );
 
+    const orderId = result.lastInsertRowid;
+
+    // Send emails (non-blocking)
+    const orderData = { id: orderId, first_name: firstName, last_name: lastName, email, phone, pickup_date: pickupDate, pickup_time: pickupTime, notes: notes || '', items: JSON.stringify(items), total };
+    Promise.all([
+        sendBakeryEmail(orderData),
+        sendClientEmail(orderData)
+    ]).catch(err => console.error('Erreur envoi email:', err));
+
     res.status(201).json({
-        id: result.lastInsertRowid,
+        id: orderId,
         message: 'Commande enregistrée avec succès'
     });
 });
