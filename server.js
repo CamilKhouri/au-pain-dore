@@ -1,24 +1,14 @@
 const express = require('express');
 const Database = require('better-sqlite3');
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 const path = require('path');
 const fs = require('fs');
 
-// ===== Email Setup =====
+// ===== Email Setup (Resend - HTTP API, pas de port SMTP bloqué) =====
 const BAKERY_EMAIL = process.env.BAKERY_EMAIL || 'ouldjicamil@gmail.com';
-const GMAIL_USER = process.env.GMAIL_USER || 'ouldjicamil@gmail.com';
-const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD || '';
-
-const transporter = GMAIL_APP_PASSWORD ? nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 587,
-    secure: false,
-    auth: { user: GMAIL_USER, pass: GMAIL_APP_PASSWORD }
-}) : null;
-
-// ===== WhatsApp Setup =====
-const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN || '';
-const WHATSAPP_PHONE_ID = process.env.WHATSAPP_PHONE_ID || '';
+const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
+const FROM_EMAIL = process.env.FROM_EMAIL || 'Au Pain Doré <onboarding@resend.dev>';
+const resend = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null;
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -75,10 +65,10 @@ function formatDate(dateStr) {
 }
 
 async function sendBakeryEmail(order) {
-    if (!transporter) return;
+    if (!resend) return;
     const items = JSON.parse(order.items);
-    await transporter.sendMail({
-        from: `Au Pain Doré <${GMAIL_USER}>`,
+    await resend.emails.send({
+        from: FROM_EMAIL,
         to: BAKERY_EMAIL,
         subject: `Nouvelle commande #${order.id} - ${order.first_name} ${order.last_name}`,
         html: `
@@ -120,10 +110,10 @@ async function sendBakeryEmail(order) {
 }
 
 async function sendClientEmail(order) {
-    if (!transporter) return;
+    if (!resend) return;
     const items = JSON.parse(order.items);
-    await transporter.sendMail({
-        from: `Au Pain Doré <${GMAIL_USER}>`,
+    await resend.emails.send({
+        from: FROM_EMAIL,
         to: order.email,
         subject: `Confirmation de votre commande - Au Pain Doré`,
         html: `
@@ -167,60 +157,6 @@ async function sendClientEmail(order) {
     });
 }
 
-// ===== WhatsApp Function =====
-function formatPhoneForWhatsApp(phone) {
-    // Remove spaces, dots, dashes
-    let cleaned = phone.replace(/[\s.\-()]/g, '');
-    // French numbers: 06/07 -> +336/+337
-    if (cleaned.startsWith('0')) {
-        cleaned = '33' + cleaned.slice(1);
-    }
-    // Remove leading +
-    if (cleaned.startsWith('+')) {
-        cleaned = cleaned.slice(1);
-    }
-    return cleaned;
-}
-
-async function sendWhatsAppConfirmation(order) {
-    if (!WHATSAPP_TOKEN || !WHATSAPP_PHONE_ID) return;
-
-    const items = JSON.parse(order.items);
-    const itemsList = items.map(i => `  - ${i.qty}x ${i.name}`).join('\n');
-    const phoneNumber = formatPhoneForWhatsApp(order.phone);
-
-    const message = `🥖 *Au Pain Doré* - Confirmation de commande\n\n`
-        + `Bonjour ${order.first_name} !\n\n`
-        + `Votre commande #${order.id} est bien enregistrée :\n\n`
-        + `${itemsList}\n\n`
-        + `*Total : ${order.total.toFixed(2).replace('.', ',')} €*\n\n`
-        + `📅 Retrait le *${formatDate(order.pickup_date)}* à *${order.pickup_time}*\n`
-        + `📍 42 Rue du Faubourg Saint-Honoré, 75008 Paris\n\n`
-        + `Merci et à bientôt ! 🙏`;
-
-    const res = await fetch(
-        `https://graph.facebook.com/v21.0/${WHATSAPP_PHONE_ID}/messages`,
-        {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${WHATSAPP_TOKEN}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                messaging_product: 'whatsapp',
-                to: phoneNumber,
-                type: 'text',
-                text: { body: message }
-            })
-        }
-    );
-
-    if (!res.ok) {
-        const err = await res.json();
-        throw new Error(`WhatsApp API error: ${JSON.stringify(err)}`);
-    }
-}
-
 // ===== API Routes =====
 
 // Create a new order
@@ -254,9 +190,8 @@ app.post('/api/orders', async (req, res) => {
     const orderData = { id: orderId, first_name: firstName, last_name: lastName, email, phone, pickup_date: pickupDate, pickup_time: pickupTime, notes: notes || '', items: JSON.stringify(items), total };
     Promise.all([
         sendBakeryEmail(orderData),
-        sendClientEmail(orderData),
-        sendWhatsAppConfirmation(orderData)
-    ]).catch(err => console.error('Erreur envoi notification:', err));
+        sendClientEmail(orderData)
+    ]).catch(err => console.error('Erreur envoi email:', err));
 
     res.status(201).json({
         id: orderId,
