@@ -7,7 +7,7 @@ const fs = require('fs');
 // ===== Email Setup (Resend - HTTP API, pas de port SMTP bloqué) =====
 const BAKERY_EMAIL = process.env.BAKERY_EMAIL || 'ouldjicamil@gmail.com';
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
-const FROM_EMAIL = process.env.FROM_EMAIL || 'Au Pain Doré <onboarding@resend.dev>';
+const FROM_EMAIL = process.env.FROM_EMAIL || 'Boulangerie Morin <onboarding@resend.dev>';
 const resend = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null;
 
 const app = express();
@@ -115,11 +115,11 @@ async function sendClientEmail(order) {
     await resend.emails.send({
         from: FROM_EMAIL,
         to: order.email,
-        subject: `Confirmation de votre commande - Au Pain Doré`,
+        subject: `Confirmation de votre commande - Boulangerie Morin`,
         html: `
         <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#1a1a1a;color:#ccc;padding:0;">
             <div style="background:#111;padding:24px;text-align:center;border-bottom:2px solid #c9a96e;">
-                <h1 style="color:#c9a96e;margin:0;font-size:22px;">Au Pain Dor&eacute;</h1>
+                <h1 style="color:#c9a96e;margin:0;font-size:22px;">Boulangerie Morin</h1>
                 <p style="color:#888;margin:8px 0 0;font-size:13px;">Confirmation de commande</p>
             </div>
             <div style="padding:24px;">
@@ -129,7 +129,7 @@ async function sendClientEmail(order) {
                 <div style="background:#222;padding:16px;margin:20px 0;border-left:3px solid #c9a96e;">
                     <p style="margin:0;color:#c9a96e;font-size:14px;text-transform:uppercase;letter-spacing:1px;">Retrait pr&eacute;vu</p>
                     <p style="margin:8px 0 0;color:#fff;font-size:18px;">${formatDate(order.pickup_date)} &agrave; ${order.pickup_time}</p>
-                    <p style="margin:8px 0 0;font-size:13px;">42 Rue du Faubourg Saint-Honor&eacute;, 75008 Paris</p>
+                    <p style="margin:8px 0 0;font-size:13px;">1 Boulevard de l'Ancien March&eacute;, 13870 Rognonas</p>
                 </div>
 
                 <table style="width:100%;border-collapse:collapse;margin:20px 0;">
@@ -151,7 +151,7 @@ async function sendClientEmail(order) {
 
                 <p style="color:#888;font-size:13px;margin-top:24px;">Si vous avez des questions, contactez-nous au 01 42 65 78 90.</p>
                 <p style="color:#888;font-size:13px;">&Agrave; bient&ocirc;t !</p>
-                <p style="color:#c9a96e;font-style:italic;">L'&eacute;quipe Au Pain Dor&eacute;</p>
+                <p style="color:#c9a96e;font-style:italic;">L'&eacute;quipe Boulangerie Morin</p>
             </div>
         </div>`
     });
@@ -305,7 +305,7 @@ app.get('/admin', (req, res) => {
 // ===== Start Server =====
 app.listen(PORT, () => {
     console.log(`\n  ╔══════════════════════════════════════════╗`);
-    console.log(`  ║     🥖  Au Pain Doré - Serveur actif     ║`);
+    console.log(`  ║  🥖  Boulangerie Morin - Serveur actif    ║`);
     console.log(`  ╠══════════════════════════════════════════╣`);
     console.log(`  ║                                          ║`);
     console.log(`  ║  Site:       http://localhost:${PORT}        ║`);

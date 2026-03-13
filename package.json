@@ -1,7 +1,7 @@
 {
-  "name": "au-pain-dore",
+  "name": "boulangerie-morin",
   "version": "1.0.0",
-  "description": "Site web et système de commande - Boulangerie Au Pain Doré",
+  "description": "Site web et système de commande - Boulangerie Morin",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
